@@ -150,7 +150,7 @@
   const COLORS={I:'#59c3ff',O:'#ffd166',T:'#c77dff',S:'#80ed99',Z:'#ff6b6b',J:'#6ea8fe',L:'#ff9f43'};
 
   const WORDS = new Set([
-    'лис','лес','кот','кит','дом','дым','сад','сок','сыр','сон','нос','рот','рис','рак','мак','лук',
+    'лис','лес','кот','кит','кол','дом','дым','сад','сок','сыр','сон','нос','рот','рис','рак','мак','лук',
     'мир','тир','час','чай','май','год','вид','ряд','ход','шар','дар','жар','пар','бар','бор','бой',
     'бок','бег','век','вес','вино','море','гора','игра','рука','нога','река','луна','лето','зима',
     'осень','весна','слово','город','метро','карта','лампа','книга','ветер','трава','огонь','вода',
@@ -309,24 +309,32 @@
           const candidates = pattern.includes('★')
             ? WORD_LIST.filter(w=>w.length===len && [...pattern].every((ch,k)=>ch==='★' || ch===w[k]))
             : (WORDS.has(pattern) ? [pattern] : []);
+
           for(const w of candidates){
             const cells=[];
+            const replacements=new Map();
             for(let k=0;k<len;k++){
-              cells.push(seg.dir==='h'
+              const cell=seg.dir==='h'
                 ? {x:seg.start+i+k,y:seg.y}
-                : {x:seg.x,y:seg.start+i+k});
+                : {x:seg.x,y:seg.start+i+k};
+              cells.push(cell);
+              if(pattern[k]==='★') replacements.set(cell.x+','+cell.y,w[k]);
             }
-            found.push({word:w,cells});
+            found.push({word:w,cells,replacements});
           }
         }
       }
     }
-    found.sort((a,b)=>b.word.length-a.word.length);
-    const picked=[], occupied=new Set();
+
+    found.sort((a,b)=>b.word.length-a.word.length || pointsFor(b.word.length)-pointsFor(a.word.length));
+    const picked=[], occupied=new Set(), wildcardPatterns=new Set();
     for(const f of found){
       const keys=f.cells.map(c=>c.x+','+c.y);
+      const wildcardKey=[...f.replacements.keys()].sort().join('|')+'@'+keys.join('|');
+      if(f.replacements.size && wildcardPatterns.has(wildcardKey)) continue;
       if(keys.every(k=>occupied.has(k))) continue;
       picked.push(f);
+      if(f.replacements.size) wildcardPatterns.add(wildcardKey);
       keys.forEach(k=>occupied.add(k));
     }
     return picked;
@@ -353,9 +361,11 @@
       bestCombo=Math.max(bestCombo,combo);
 
       const clearMap=new Set();
+      const replacements=new Map();
       let base=0;
       for(const f of found){
         f.cells.forEach(c=>clearMap.add(c.x+','+c.y));
+        f.replacements.forEach((letter,key)=>{ if(!replacements.has(key)) replacements.set(key,letter); });
         base+=pointsFor(f.word.length);
       }
       const gained=base*combo;
@@ -365,8 +375,14 @@
       const names=found.map(f=>f.word.toUpperCase()).join(', ');
       setToast(names, `+${gained.toLocaleString('ru-RU')} очков${combo>1?` · combo ×${combo}`:''}`, combo>1);
 
-      draw(clearMap);
-      await sleep(220);
+      for(let flash=0;flash<3;flash++){
+        draw(clearMap,replacements);
+        await sleep(180);
+        draw(new Set(),replacements);
+        await sleep(115);
+      }
+      draw(clearMap,replacements);
+      await sleep(160);
 
       clearMap.forEach(key=>{
         const [x,y]=key.split(',').map(Number);
@@ -413,7 +429,7 @@
     document.getElementById('pauseBtn').textContent=paused?'Продолжить':'Пауза';
   }
 
-  function drawCell(context, gx, gy, cell, size=CELL, highlight=false){
+  function drawCell(context, gx, gy, cell, size=CELL, highlight=false, displayLetter=null){
     const px=gx*size, py=gy*size;
     context.fillStyle=highlight?'#ffffff':cell.color;
     context.fillRect(px+1,py+1,size-2,size-2);
@@ -422,17 +438,17 @@
     context.fillStyle=highlight?'#111827':'#0b0f14';
     context.font=`800 ${Math.floor(size*.55)}px system-ui`;
     context.textAlign='center'; context.textBaseline='middle';
-    context.fillText(cell.letter.toUpperCase(),px+size/2,py+size/2+1);
+    context.fillText((displayLetter||cell.letter).toUpperCase(),px+size/2,py+size/2+1);
   }
 
-  function draw(highlights=new Set()){
+  function draw(highlights=new Set(),replacements=new Map()){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle='#0b0f14'; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.strokeStyle='rgba(255,255,255,.045)';
     for(let x=0;x<=COLS;x++){ctx.beginPath();ctx.moveTo(x*CELL,0);ctx.lineTo(x*CELL,ROWS*CELL);ctx.stroke();}
     for(let y=0;y<=ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*CELL);ctx.lineTo(COLS*CELL,y*CELL);ctx.stroke();}
     for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-      if(board[y][x]) drawCell(ctx,x,y,board[y][x],CELL,highlights.has(x+','+y));
+      if(board[y][x]) { const key=x+','+y; drawCell(ctx,x,y,board[y][x],CELL,highlights.has(key),replacements.get(key)||null); }
     }
     if(current&&!gameOver){
       current.matrix.forEach((row,y)=>row.forEach((cell,x)=>{

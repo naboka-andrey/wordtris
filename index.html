@@ -120,7 +120,7 @@
     <div class="help">
       <b>Управление:</b> ← → двигать, ↑ вращать, ↓ ускорить, пробел — бросить вниз.<br><br>
       Чем длиннее слово, тем сильнее растут очки: <b>3 = 100</b>, <b>4 = 300</b>, <b>5 = 800</b>, <b>6 = 2 000</b>, <b>7 = 5 000</b>, <b>8 = 12 000</b>, <b>9+ = 30 000+</b>.<br><br>
-      Если после падения букв само возникает новое слово — включается <b>combo ×2, ×3, ×4…</b>
+      Если после падения букв само возникает новое слово — включается <b>combo ×2, ×3, ×4…</b><br><br><b>★</b> — редкий джокер: заменяет любую букву в слове.
     </div>
   </div>
 </div>
@@ -163,7 +163,16 @@
     'старт','финиш','бонус','серия','комбо','ход','игра'
   ].filter(w=>w.length>=3));
 
-  const LETTER_BAG = [...'ооооооооооааааааааееееееееииииииииинннннннннтттттттттссссссссрррррррввввввлллллкккккмммммддддппппуууубббяяяыыыггггчччййььззжжххшшююцэфщъ'];
+  const LETTER_BAG = [...'ооооооооооооааааааааааееееееееееииииииииииууууууяяяяююыыээнннннннннтттттттттссссссссрррррррввввввлллллкккккмммммддддппппбббггггчччййььззжжххшшцфщъ'];
+  const VOWELS = new Set([...'аеёиоуыэюя']);
+  const WORD_LIST = [...WORDS];
+  const SYLLABLE_BAG = [];
+  for (const word of WORD_LIST) {
+    for (let i=0;i<word.length-1;i++) {
+      const pair=word.slice(i,i+2);
+      if ([...pair].some(ch=>VOWELS.has(ch))) SYLLABLE_BAG.push(pair);
+    }
+  }
 
   let board, current, nextPiece, score, totalWords, bestCombo, level, dropMs, lastTime, acc, paused, gameOver;
 
@@ -174,13 +183,25 @@
   }
 
   function makePiece(){
+    if(Math.random()<0.045){
+      return {type:'STAR',matrix:[[{letter:'★',color:'#ffd166'}]],x:Math.floor(COLS/2),y:-1};
+    }
+
     const source = level===1 ? LEVEL1_SHAPES : SHAPES;
     const types=Object.keys(source);
     const type=types[Math.floor(Math.random()*types.length)];
     const shape=source[type].map(r=>[...r]);
     let idx=0;
     const cells=shape.flat().filter(Boolean).length;
-    const letters=Array.from({length:cells},randomLetter);
+    let letters;
+
+    if(level===1 && cells===2){
+      const syllable=SYLLABLE_BAG[Math.floor(Math.random()*SYLLABLE_BAG.length)];
+      letters=[...syllable];
+    } else {
+      letters=Array.from({length:cells},randomLetter);
+    }
+
     const color = level===1 ? '#8ecae6' : COLORS[type];
     const matrix=shape.map(row=>row.map(v=>v?{letter:letters[idx++],color}:null));
     return {type,matrix,x:Math.floor((COLS-shape[0].length)/2),y:-1};
@@ -284,8 +305,11 @@
       const s=seg.text;
       for(let len=s.length;len>=3;len--){
         for(let i=0;i+len<=s.length;i++){
-          const w=s.slice(i,i+len).toLowerCase();
-          if(WORDS.has(w)){
+          const pattern=s.slice(i,i+len).toLowerCase();
+          const candidates = pattern.includes('★')
+            ? WORD_LIST.filter(w=>w.length===len && [...pattern].every((ch,k)=>ch==='★' || ch===w[k]))
+            : (WORDS.has(pattern) ? [pattern] : []);
+          for(const w of candidates){
             const cells=[];
             for(let k=0;k<len;k++){
               cells.push(seg.dir==='h'

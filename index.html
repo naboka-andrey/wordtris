@@ -175,6 +175,7 @@
   }
 
   let board, current, nextPiece, score, totalWords, bestCombo, level, dropMs, lastTime, acc, paused, gameOver;
+  let flashHighlights=new Set(), flashReplacements=new Map();
 
   function emptyBoard(){ return Array.from({length:ROWS},()=>Array(COLS).fill(null)); }
 
@@ -210,6 +211,7 @@
   function reset(){
     board=emptyBoard(); score=0; totalWords=0; bestCombo=0; level=1; dropMs=1200;
     paused=false; gameOver=false; acc=0; lastTime=performance.now();
+    flashHighlights=new Set(); flashReplacements=new Map();
     current=makePiece(); nextPiece=makePiece();
     updateUI(); draw(); drawNext();
     setToast('Собирай слова','Слова от 3 букв исчезают по горизонтали и вертикали.');
@@ -376,13 +378,14 @@
       setToast(names, `+${gained.toLocaleString('ru-RU')} очков${combo>1?` · combo ×${combo}`:''}`, combo>1);
 
       for(let flash=0;flash<3;flash++){
-        draw(clearMap,replacements);
+        flashHighlights=clearMap; flashReplacements=replacements;
         await sleep(180);
-        draw(new Set(),replacements);
+        flashHighlights=new Set(); flashReplacements=replacements;
         await sleep(115);
       }
-      draw(clearMap,replacements);
+      flashHighlights=clearMap; flashReplacements=replacements;
       await sleep(160);
+      flashHighlights=new Set(); flashReplacements=new Map();
 
       clearMap.forEach(key=>{
         const [x,y]=key.split(',').map(Number);
@@ -481,7 +484,7 @@
       acc+=dt;
       if(acc>=dropMs){acc=0;down();}
     }
-    draw();
+    draw(flashHighlights,flashReplacements);
     requestAnimationFrame(loop);
   }
 

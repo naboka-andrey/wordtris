@@ -143,6 +143,10 @@
     J:[[1,0,0],[1,1,1]],
     L:[[0,0,1],[1,1,1]]
   };
+  const LEVEL1_SHAPES={
+    A:[[1]],
+    B:[[1,1]]
+  };
   const COLORS={I:'#59c3ff',O:'#ffd166',T:'#c77dff',S:'#80ed99',Z:'#ff6b6b',J:'#6ea8fe',L:'#ff9f43'};
 
   const WORDS = new Set([
@@ -159,7 +163,7 @@
     'старт','финиш','бонус','серия','комбо','ход','игра'
   ].filter(w=>w.length>=3));
 
-  const LETTER_BAG = [...'оооооооааааааееееееиииииннннттттссссррррвввлллкккмммдддпппууббяяыыггччййььззжжххшшюцэфщ'];
+  const LETTER_BAG = [...'ооооооооооааааааааееееееееииииииииинннннннннтттттттттссссссссрррррррввввввлллллкккккмммммддддппппуууубббяяяыыыггггчччййььззжжххшшююцэфщъ'];
 
   let board, current, nextPiece, score, totalWords, bestCombo, level, dropMs, lastTime, acc, paused, gameOver;
 
@@ -170,18 +174,20 @@
   }
 
   function makePiece(){
-    const types=Object.keys(SHAPES);
+    const source = level===1 ? LEVEL1_SHAPES : SHAPES;
+    const types=Object.keys(source);
     const type=types[Math.floor(Math.random()*types.length)];
-    const shape=SHAPES[type].map(r=>[...r]);
+    const shape=source[type].map(r=>[...r]);
     let idx=0;
     const cells=shape.flat().filter(Boolean).length;
     const letters=Array.from({length:cells},randomLetter);
-    const matrix=shape.map(row=>row.map(v=>v?{letter:letters[idx++],color:COLORS[type]}:null));
+    const color = level===1 ? '#8ecae6' : COLORS[type];
+    const matrix=shape.map(row=>row.map(v=>v?{letter:letters[idx++],color}:null));
     return {type,matrix,x:Math.floor((COLS-shape[0].length)/2),y:-1};
   }
 
   function reset(){
-    board=emptyBoard(); score=0; totalWords=0; bestCombo=0; level=1; dropMs=750;
+    board=emptyBoard(); score=0; totalWords=0; bestCombo=0; level=1; dropMs=1200;
     paused=false; gameOver=false; acc=0; lastTime=performance.now();
     current=makePiece(); nextPiece=makePiece();
     updateUI(); draw(); drawNext();
@@ -362,7 +368,7 @@
 
   function updateLevel(){
     level=1+Math.floor(totalWords/8);
-    dropMs=Math.max(140,750-(level-1)*55);
+    dropMs = level===1 ? 1200 : Math.max(180,820-(level-2)*55);
   }
 
   function endGame(){

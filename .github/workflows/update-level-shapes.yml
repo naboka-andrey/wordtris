@@ -1,0 +1,41 @@
+name: Update level shape progression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/update-level-shapes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch index.html
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old="const SH={I:[[1,1,1,1]],O:[[1,1],[1,1]],T:[[0,1,0],[1,1,1]],S:[[0,1,1],[1,1,0]],Z:[[1,1,0],[0,1,1]],J:[[1,0,0],[1,1,1]],L:[[0,0,1],[1,1,1]]},L1={A:[[1]],B:[[1,1]]},COL={I:'#59c3ff',O:'#ffd166',T:'#c77dff',S:'#80ed99',Z:'#ff6b6b',J:'#6ea8fe',L:'#ff9f43'};"
+          new="const SH={A:[[1]],B:[[1,1]],C:[[1,1,1]],I:[[1,1,1,1]],O:[[1,1],[1,1]],T:[[0,1,0],[1,1,1]],S:[[0,1,1],[1,1,0]],Z:[[1,1,0],[0,1,1]],J:[[1,0,0],[1,1,1]],L:[[0,0,1],[1,1,1]]},COL={A:'#8ecae6',B:'#8ecae6',C:'#90dbf4',I:'#59c3ff',O:'#ffd166',T:'#c77dff',S:'#80ed99',Z:'#ff6b6b',J:'#6ea8fe',L:'#ff9f43'};function levelKeys(l){if(l<=1)return['A','B'];if(l===2)return['A','B','C'];if(l===3)return['A','B','C','I','O'];return['A','B','C','I','O','T','J','L','S','Z']}"
+          if old not in s:
+              raise SystemExit('shape definition pattern not found')
+          s=s.replace(old,new,1)
+          old2="const src=level===1?L1:SH,keys=Object.keys(src),k=keys[Math.floor(Math.random()*keys.length)],sh=src[k].map(r=>[...r]),cells=sh.flat().filter(Boolean).length;let ls;if(level===1&&cells===2&&SYL.length)ls=[...SYL[Math.floor(Math.random()*SYL.length)]];else ls=Array.from({length:cells},rnd);let i=0,c=level===1?'#8ecae6':COL[k];"
+          new2="const keys=levelKeys(level),k=keys[Math.floor(Math.random()*keys.length)],sh=SH[k].map(r=>[...r]),cells=sh.flat().filter(Boolean).length;let ls;if(cells===2&&SYL.length)ls=[...SYL[Math.floor(Math.random()*SYL.length)]];else ls=Array.from({length:cells},rnd);let i=0,c=COL[k];"
+          if old2 not in s:
+              raise SystemExit('piece generator pattern not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Apply level shape progression'
+          git push

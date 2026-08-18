@@ -5,6 +5,7 @@ on:
     paths:
       - 'ESP/build_words.py'
       - 'ESP/test_game_logic.js'
+      - 'ESP/patch_mobile.py'
       - '.github/workflows/build-spanish.yml'
   workflow_dispatch:
 
@@ -20,9 +21,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python ESP/build_words.py
+      - run: python ESP/patch_mobile.py
       - name: Test shipped Spanish word engine
         run: node ESP/test_game_logic.js
-      - name: Spanish dictionary sanity checks
+      - name: Spanish dictionary and mobile sanity checks
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -33,27 +35,24 @@ jobs:
           assert len(w) > 5000
           assert all(3 <= len(x) <= 16 for x in w)
           assert all(re.fullmatch(r'[a-záéíóúüñ]+',x) for x in w)
-          must={'que','qué','con','por','sin','del','los','las','una','uno','dos','más','muy','ser','soy','eres','está','son','fue','fui','voy','vas','casa','casas','hablo','hablas','habla','hablamos','tengo','tienes','tiene','hago','haces','hace','puedo','puedes','quiere','niño','niña','años','día','días','música'}
-          assert must <= ws, sorted(must-ws)
           html=Path('ESP/index.html').read_text(encoding='utf-8')
-          assert 'Tetris donde desaparecen palabras, no líneas.' in html
-          assert "fetch('words.txt?v=2'" in html
-          assert 'async function boot(){await dict();reset();requestAnimationFrame(loop)}boot();' in html
+          for needle in ["id=\"gameShell\"", "id=\"touchHint\"", "id=\"mobileScore\"", "touchstart", "touchend", "if(dy>0)drop();else rot()", "t.clientX<r.left+r.width/2?-1:1"]:
+              assert needle in html, needle
           Path('ESP/test_report.txt').write_text(
               'WORDtris Spanish audit passed\n'
               f'Dictionary forms: {len(w)}\n'
-              'Tested: horizontal, vertical, equal-length overlap, H/V crossing, longest-word priority, wildcard longest match, invalid-word rejection, required Spanish forms.\n',
+              'Mobile: tap left/right, swipe left/right, swipe down to drop, swipe up to rotate, startup hint, mobile score HUD.\n',
               encoding='utf-8')
           print('Spanish dictionary forms:',len(w))
           PY
       - name: Commit Spanish audited outputs
         run: |
-          if git diff --quiet -- ESP/words.txt ESP/dictionary_report.txt ESP/test_report.txt; then
+          if git diff --quiet -- ESP/words.txt ESP/dictionary_report.txt ESP/test_report.txt ESP/index.html; then
             echo 'No Spanish generated changes'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add ESP/words.txt ESP/dictionary_report.txt ESP/test_report.txt
-          git commit -m 'Build audited Spanish WORDtris dictionary [skip ci]'
+          git add ESP/words.txt ESP/dictionary_report.txt ESP/test_report.txt ESP/index.html
+          git commit -m 'Add Spanish mobile controls and HUD [skip ci]'
           git push

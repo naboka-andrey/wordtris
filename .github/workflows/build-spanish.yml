@@ -19,7 +19,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install wordfreq
       - run: python ESP/build_words.py
       - name: Test shipped Spanish word engine
         run: node ESP/test_game_logic.js
@@ -31,13 +30,14 @@ jobs:
           w=Path('ESP/words.txt').read_text(encoding='utf-8').splitlines()
           ws=set(w)
           assert len(w)==len(ws)
+          assert len(w) > 5000
           assert all(3 <= len(x) <= 16 for x in w)
           assert all(re.fullmatch(r'[a-záéíóúüñ]+',x) for x in w)
-          must={'que','con','por','sin','del','los','las','una','uno','dos','más','muy','ser','soy','eres','está','son','fue','fui','voy','vas','casa','casas','hablo','hablas','habla','hablamos','tengo','tienes','tiene','hago','haces','hace','puedo','puedes','quiere','niño','niña','años','día','días','música'}
+          must={'que','qué','con','por','sin','del','los','las','una','uno','dos','más','muy','ser','soy','eres','está','son','fue','fui','voy','vas','casa','casas','hablo','hablas','habla','hablamos','tengo','tienes','tiene','hago','haces','hace','puedo','puedes','quiere','niño','niña','años','día','días','música'}
           assert must <= ws, sorted(must-ws)
           html=Path('ESP/index.html').read_text(encoding='utf-8')
           assert 'Tetris donde desaparecen palabras, no líneas.' in html
-          assert "fetch('words.txt?v=1'" in html
+          assert "fetch('words.txt?v=2'" in html
           assert 'async function boot(){await dict();reset();requestAnimationFrame(loop)}boot();' in html
           Path('ESP/test_report.txt').write_text(
               'WORDtris Spanish audit passed\n'

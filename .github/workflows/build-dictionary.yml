@@ -41,16 +41,21 @@ jobs:
           assert "const s=new Set();const local=await fetch('words.txt?v=7'" in html
           assert 'async function boot(){await dict();reset();requestAnimationFrame(loop)}boot()' in html
           assert 'raw.githubusercontent.com/quadripartite' not in html
+          Path('test_report.txt').write_text(
+              'WORDtris audit passed\n'
+              f'Dictionary forms: {len(w)}\n'
+              'Tested: horizontal, vertical, equal-length overlap, H/V crossing, longest-word priority, wildcard longest match, invalid-word rejection, dictionary required/forbidden words.\n',
+              encoding='utf-8')
           print('dictionary words:',len(w))
           PY
       - name: Commit audited outputs
         run: |
-          if git diff --quiet -- words.txt dictionary_report.txt index.html; then
+          if git diff --quiet -- words.txt dictionary_report.txt index.html test_report.txt; then
             echo 'No generated changes'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add words.txt dictionary_report.txt index.html
-          git commit -m 'Apply audited WORDtris dictionary and game fixes [skip ci]'
+          git add words.txt dictionary_report.txt index.html test_report.txt
+          git commit -m 'Record successful WORDtris audit [skip ci]'
           git push

@@ -19,8 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install wordfreq spacy
-      - run: python -m spacy download es_core_news_sm
+      - run: pip install wordfreq
       - run: python ESP/build_words.py
       - name: Test shipped Spanish word engine
         run: node ESP/test_game_logic.js

@@ -5,6 +5,7 @@ on:
     paths:
       - 'build_words.py'
       - 'patch_game.py'
+      - 'test_game_logic.js'
       - '.github/workflows/build-dictionary.yml'
   workflow_dispatch:
 
@@ -22,6 +23,8 @@ jobs:
       - run: pip install pymorphy3 wordfreq
       - run: python build_words.py
       - run: python patch_game.py
+      - name: Test shipped word-matching functions
+        run: node test_game_logic.js
       - name: Dictionary and game sanity checks
         run: |
           python - <<'PY'

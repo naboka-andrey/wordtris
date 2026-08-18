@@ -1,0 +1,60 @@
+name: Audit WORDtris Spanish
+
+on:
+  push:
+    paths:
+      - 'ESP/build_words.py'
+      - 'ESP/test_game_logic.js'
+      - '.github/workflows/build-spanish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit-spanish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install wordfreq spacy
+      - run: python -m spacy download es_core_news_sm
+      - run: python ESP/build_words.py
+      - name: Test shipped Spanish word engine
+        run: node ESP/test_game_logic.js
+      - name: Spanish dictionary sanity checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          w=Path('ESP/words.txt').read_text(encoding='utf-8').splitlines()
+          ws=set(w)
+          assert len(w)==len(ws)
+          assert all(3 <= len(x) <= 16 for x in w)
+          assert all(re.fullmatch(r'[a-záéíóúüñ]+',x) for x in w)
+          must={'que','con','por','sin','del','los','las','una','uno','dos','más','muy','ser','soy','eres','está','son','fue','fui','voy','vas','casa','casas','hablo','hablas','habla','hablamos','tengo','tienes','tiene','hago','haces','hace','puedo','puedes','quiere','niño','niña','años','día','días','música'}
+          assert must <= ws, sorted(must-ws)
+          html=Path('ESP/index.html').read_text(encoding='utf-8')
+          assert 'Tetris donde desaparecen palabras, no líneas.' in html
+          assert "fetch('words.txt?v=1'" in html
+          assert 'async function boot(){await dict();reset();requestAnimationFrame(loop)}boot();' in html
+          Path('ESP/test_report.txt').write_text(
+              'WORDtris Spanish audit passed\n'
+              f'Dictionary forms: {len(w)}\n'
+              'Tested: horizontal, vertical, equal-length overlap, H/V crossing, longest-word priority, wildcard longest match, invalid-word rejection, required Spanish forms.\n',
+              encoding='utf-8')
+          print('Spanish dictionary forms:',len(w))
+          PY
+      - name: Commit Spanish audited outputs
+        run: |
+          if git diff --quiet -- ESP/words.txt ESP/dictionary_report.txt ESP/test_report.txt; then
+            echo 'No Spanish generated changes'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ESP/words.txt ESP/dictionary_report.txt ESP/test_report.txt
+          git commit -m 'Build audited Spanish WORDtris dictionary [skip ci]'
+          git push

@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+from collections import Counter
 
 from pymorphy3 import MorphAnalyzer
 from wordfreq import top_n_list, zipf_frequency
@@ -16,7 +17,7 @@ WHITE = set('''
 еду едет едут ехал ехала ехали ехать
 воин воина воину воином воине воины воинов воинам воинами воинах
 вена вены вену веной вене венам венами венах
-пат мат гол сет риф кот лес лис дом домы дома тихо быстро красная играет
+пат мат гол сет риф кот лес лис дом дома тихо быстро красная играет
 '''.split())
 CYR = re.compile(r'^[а-яё]+$', re.I)
 
@@ -29,7 +30,6 @@ def clean(w):
 def acceptable_parse(p):
     return p.tag.POS in ALLOWED_POS and not (set(p.tag.grammemes) & BLOCK_GRAMMEMES)
 
-# Modern frequent surface forms are the gate that chooses useful lemmas.
 seeds = top_n_list('ru', 60000)
 lemmas = {}
 direct = set()
@@ -47,13 +47,10 @@ for raw in seeds:
         lemmas.setdefault(lemma, p)
 
 words = set(WHITE)
-# Keep genuinely frequent surface forms regardless of whether they are inflected.
 for w in direct:
     if zipf_frequency(w, 'ru') >= 3.15:
         words.add(w)
 
-# Expand only lemmas already observed in modern frequent text. Generated forms still
-# need some corpus presence, which cuts dictionary curiosities but keeps ordinary cases/verbs.
 for lemma, p in lemmas.items():
     if zipf_frequency(lemma, 'ru') < 3.25:
         continue
@@ -67,16 +64,25 @@ for lemma, p in lemmas.items():
             words.add(w)
 
 words -= BLACK
-# Hard validation: no garbage shape, no duplicates, required gameplay words present.
 words = {w for w in words if clean(w) == w}
 required = {'том','дуб','бук','учи','еду','воин','вена','пат','мат','гол','сет','риф','кот','лес','дом','тихо','быстро','красная','играет'}
 missing = required - words
 if missing:
     raise SystemExit(f'missing required words: {sorted(missing)}')
-leaked = BLACK & words
-if leaked:
-    raise SystemExit(f'blacklisted words leaked: {sorted(leaked)}')
+if BLACK & words:
+    raise SystemExit(f'blacklisted words leaked: {sorted(BLACK & words)}')
 
-out = '\n'.join(sorted(words, key=lambda x: (len(x), x))) + '\n'
-Path('words.txt').write_text(out, encoding='utf-8')
+ordered = sorted(words, key=lambda x: (len(x), x))
+Path('words.txt').write_text('\n'.join(ordered) + '\n', encoding='utf-8')
+
+counts = Counter(map(len, ordered))
+report = [f'TOTAL\t{len(ordered)}']
+report += [f'LEN_{n}\t{counts[n]}' for n in range(MIN_LEN, MAX_LEN + 1)]
+report.append('')
+report.append('THREE_LETTER_WORDS')
+for w in [x for x in ordered if len(x) == 3]:
+    parses = [p for p in morph.parse(w) if acceptable_parse(p)]
+    p = parses[0] if parses else morph.parse(w)[0]
+    report.append(f'{w}\t{zipf_frequency(w,"ru"):.2f}\t{p.normal_form}\t{p.tag.POS or "?"}')
+Path('dictionary_report.txt').write_text('\n'.join(report) + '\n', encoding='utf-8')
 print(f'Wrote {len(words)} controlled word forms')

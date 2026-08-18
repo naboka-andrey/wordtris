@@ -1,9 +1,10 @@
-name: Build WORDtris dictionary
+name: Audit WORDtris
 
 on:
   push:
     paths:
       - 'build_words.py'
+      - 'patch_game.py'
       - '.github/workflows/build-dictionary.yml'
   workflow_dispatch:
 
@@ -11,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,25 +21,33 @@ jobs:
           python-version: '3.12'
       - run: pip install pymorphy3 wordfreq
       - run: python build_words.py
-      - name: Sanity checks
+      - run: python patch_game.py
+      - name: Dictionary and game sanity checks
         run: |
           python - <<'PY'
           from pathlib import Path
           w=Path('words.txt').read_text(encoding='utf-8').splitlines()
-          assert len(w) == len(set(w))
+          ws=set(w)
+          assert len(w)==len(ws)
           assert all(3 <= len(x) <= 16 for x in w)
-          assert {'том','дуб','бук','учи','еду','воин','вена'} <= set(w)
-          assert not ({'осо','одав','ски'} & set(w))
-          print('dictionary words:', len(w))
+          must={'том','дуб','бук','учи','еду','воин','вена','пат','мат','гол','сет','риф','кот','лес','дом','тихо','быстро','красная','играет'}
+          bad={'осо','одав','ски','ооо','ааа','нии','мвд','гаи'}
+          assert must <= ws, sorted(must-ws)
+          assert not (bad & ws), sorted(bad&ws)
+          html=Path('index.html').read_text(encoding='utf-8')
+          assert "const s=new Set();const local=await fetch('words.txt?v=7'" in html
+          assert 'async function boot(){await dict();reset();requestAnimationFrame(loop)}boot()' in html
+          assert 'raw.githubusercontent.com/quadripartite' not in html
+          print('dictionary words:',len(w))
           PY
-      - name: Commit generated dictionary
+      - name: Commit audited outputs
         run: |
-          if git diff --quiet -- words.txt dictionary_report.txt; then
-            echo 'No dictionary changes'
+          if git diff --quiet -- words.txt dictionary_report.txt index.html; then
+            echo 'No generated changes'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add words.txt dictionary_report.txt
-          git commit -m 'Rebuild controlled Russian dictionary [skip ci]'
+          git add words.txt dictionary_report.txt index.html
+          git commit -m 'Apply audited WORDtris dictionary and game fixes [skip ci]'
           git push

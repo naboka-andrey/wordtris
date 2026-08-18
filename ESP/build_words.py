@@ -3,27 +3,26 @@ from collections import Counter
 import re
 import unicodedata
 
-import spacy
 from wordfreq import top_n_list, zipf_frequency
 
 MIN_LEN, MAX_LEN = 3, 16
 WORD_RE = re.compile(r'^[a-záéíóúüñ]+$', re.I)
 
-# Three-letter strings occur by accident very often in WORDtris, so they are
-# deliberately hand-curated instead of trusting a large corpus blindly.
+# Three-letter strings happen accidentally very often in WORDtris. Keep them
+# deliberately curated instead of accepting every corpus token.
 SHORT3 = set('''
-ahi aún aun ave bar boa cal can col con dar del día dio dos eco eje era ese esa eso fue fin fui gas hay haz hoy iba ida iré ley los las luz mal mar mas más mes mil muy nos ola oro osa oso pan paz pie por que red rey río sal sea sed ser sin sol son soy sur tal tan té te tí tia tía tio tío tos tres? uno uva vas vea ven ver vez voy web ya
-amo ama dan das dio doy haz has lee leo pon sal sé se ten usa use va
-'''.replace('tres?','').split())
+ahí ahi aún aun ave bar boa cal can col con dar del día dio dos eco eje era ese esa eso fue fin fui gas hay haz hoy iba ida iré ley los las luz mal mar mas más mes mil muy nos ola oro osa oso pan paz pie por que red rey río sal sea sed ser sin sol son soy sur tal tan té ten tía tia tío tio tos uno uva vas vea ven ver vez voy web
+amo ama dan das doy lee leo pon usa use
+'''.split())
 
-# Explicitly required common words/forms. They also protect us against a POS
-# tagger occasionally misreading a word in isolation.
+# Important everyday lemmas and forms are explicitly protected. The corpus then
+# contributes tens of thousands of additional real surface forms.
 WHITE = set('''
-ser soy eres es somos sois son era eras éramos erais eran fui fuiste fue fuimos fuisteis fueron sido siendo
+ser soy eres somos sois son era eras éramos erais eran fui fuiste fue fuimos fuisteis fueron sido siendo
 estar estoy estás está estamos estáis están estaba estabas estábamos estabais estaban estuve estuviste estuvo estuvimos estuvisteis estuvieron estado estando
 tener tengo tienes tiene tenemos tenéis tienen tenía tenías teníamos tenían tuve tuviste tuvo tuvimos tuvieron tenido teniendo
 hacer hago haces hace hacemos hacéis hacen hacía hacías hacíamos hacían hice hiciste hizo hicimos hicieron hecho haciendo
-ir voy vas va vamos vais van iba ibas íbamos iban fui fuiste fue fuimos fueron ido yendo
+voy vas vamos vais van iba ibas íbamos iban ido yendo
 decir digo dices dice decimos decís dicen decía dije dijiste dijo dijimos dijeron dicho diciendo
 poder puedo puedes puede podemos podéis pueden podía pude pudo pudieron podido pudiendo
 querer quiero quieres quiere queremos queréis quieren quería quise quiso quisieron querido queriendo
@@ -39,13 +38,15 @@ música cine teatro mundo vida tiempo año años día días noche noches mano ma
 bien mal grande grandes pequeño pequeña pequeños pequeñas rojo roja rojos rojas verde verdes azul azules
 '''.split()) | SHORT3
 
+# High-frequency proper names, countries/cities, abbreviations and web/technical
+# tokens that are especially likely to leak from general corpora.
 BLACK = set('''
-www http https com org net app pdf jpg png html css js api url sms gps cpu gpu usb dvd
-madrid barcelona españa spain mexico méxico argentina chile peru perú colombia venezuela
-juan jose josé maria maría pedro pablo carlos david daniel ana laura lucia lucía
+www http https com org net app pdf jpg jpeg png html css javascript js api url sms gps cpu gpu usb dvd
+madrid barcelona valencia sevilla malaga málaga bilbao zaragoza españa spain mexico méxico argentina chile peru perú colombia venezuela brasil brazil cuba ecuador bolivia paraguay uruguay panama panamá
+juan jose josé maria maría pedro pablo carlos david daniel miguel angel ángel antonio manuel francisco javier alejandro fernando sergio diego alberto raul raúl ruben rubén jorge luis jesus jesús
+ana laura lucia lucía carmen elena isabel paula sara sofia sofía marta patricia monica mónica sandra rosa beatriz natalia cristina silvia teresa
+messi ronaldo madridista barça barca google facebook instagram twitter youtube whatsapp tiktok amazon apple microsoft samsung sony
 '''.split())
-
-nlp = spacy.load('es_core_news_sm', disable=['parser', 'ner', 'lemmatizer'])
 
 
 def clean(raw: str):
@@ -59,38 +60,25 @@ def threshold(n: int):
     if n == 3:
         return 99.0
     if n == 4:
-        return 3.85
+        return 3.95
     if n == 5:
-        return 3.55
-    return 3.20
+        return 3.65
+    if n <= 8:
+        return 3.35
+    return 3.25
 
-# wordfreq contains real surface forms, not only lemmas. This is important for
-# Spanish: common conjugated verbs, plurals and gendered adjective forms are
-# therefore included when people actually use them.
-raw_candidates = []
-seen = set()
-for raw in top_n_list('es', 110000):
-    w = clean(raw)
-    if not w or w in seen or w in BLACK or len(w) == 3:
-        continue
-    if zipf_frequency(w, 'es') < threshold(len(w)):
-        continue
-    seen.add(w)
-    raw_candidates.append(w)
-
+# wordfreq is a corpus-derived list of actual Spanish surface forms. This means
+# common conjugations, plurals and masculine/feminine adjective forms enter as
+# independent playable words when they are genuinely frequent.
 words = set(WHITE)
-
-# A contextual tagger is used as a second filter. We reject proper names,
-# numbers, punctuation and unknown tokens; ordinary function words are allowed.
-for w, doc in zip(raw_candidates, nlp.pipe(raw_candidates, batch_size=512)):
-    if not doc or len(doc) != 1:
+for raw in top_n_list('es', 120000):
+    w = clean(raw)
+    if not w or w in BLACK:
         continue
-    tok = doc[0]
-    if tok.pos_ in {'PROPN', 'NUM', 'PUNCT', 'SYM', 'X'}:
+    if len(w) == 3:
         continue
-    if tok.is_oov and zipf_frequency(w, 'es') < 4.0:
-        continue
-    words.add(w)
+    if zipf_frequency(w, 'es') >= threshold(len(w)):
+        words.add(w)
 
 words -= BLACK
 words = {w for w in words if clean(w) == w and (len(w) != 3 or w in SHORT3)}

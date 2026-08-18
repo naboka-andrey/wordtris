@@ -9,9 +9,6 @@ MIN_LEN, MAX_LEN = 3, 16
 ALLOWED_POS = {'NOUN','VERB','INFN','ADJF','ADJS','ADVB','NPRO','PRED','COMP'}
 BLOCK_GRAMMEMES = {'Name','Surn','Patr','Geox','Orgn','Abbr','Fixd','LATN','ROMN'}
 BLACK = set('''осо одав ски ооо ааа еее иии нии оон ссс рфс сша сср снг мвд гаи гиб гибдд гто нло нпо'''.split())
-# Three-letter accidental combinations are extremely common in WORDtris, so this list
-# is intentionally hand-curated. It includes ordinary inflected forms, verbs, adjectives,
-# pronouns and adverbs, but not obscure dictionary curiosities or abbreviations.
 SHORT3 = set('''
 акт арт аут баб баз бак бал бан бар бас бег бед бей бес бил бит бич боб бог бои бой бок бор бот бою боя бук бум бур бык был быт бью
 вам вар вас ваш веб век вел вес вид вне вод воз вон вор ври вру все всю вся
@@ -30,7 +27,7 @@ SHORT3 = set('''
 раз рад рай рак рев рис риф род рок рот ряд
 сад сам сел сет сил сом сон суп суд сух сын сыр сыт
 так там тех тих тип том тон топ тот тур тут
-уха ухо
+уха ухо учи
 ход хор
 чай час чек чем чин
 шар шей шеф шла шли шов шел шум
@@ -72,8 +69,6 @@ for raw in seeds:
     w = clean(raw)
     if not w or w in BLACK:
         continue
-    # Only the most probable analysis is allowed. This prevents a name, typo or
-    # function word from entering through a rare alternative dictionary analysis.
     p = morph.parse(w)[0]
     if not acceptable_parse(p):
         continue
@@ -99,7 +94,6 @@ for lemma, p in lemmas.items():
         if zipf_frequency(w, 'ru') >= generated_threshold(len(w)):
             words.add(w)
 
-# The 3-letter set is exactly the curated set; generated short curiosities are never allowed.
 words = {w for w in words if len(w) != 3 or w in SHORT3}
 words -= BLACK
 words = {w for w in words if clean(w) == w}

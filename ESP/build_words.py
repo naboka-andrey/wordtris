@@ -1,22 +1,21 @@
 from pathlib import Path
 from collections import Counter
+from urllib.request import Request, urlopen
 import re
 import unicodedata
 
-from wordfreq import top_n_list, zipf_frequency
-
 MIN_LEN, MAX_LEN = 3, 16
 WORD_RE = re.compile(r'^[a-záéíóúüñ]+$', re.I)
+SOURCE = 'https://raw.githubusercontent.com/mazyvan/most-common-spanish-words/master/most-common-spanish-words-v4.txt'
 
-# Three-letter strings happen accidentally very often in WORDtris. Keep them
-# deliberately curated instead of accepting every corpus token.
+# Three-letter strings appear accidentally very often in WORDtris, so they are
+# hand-curated instead of accepting every short corpus token.
 SHORT3 = set('''
-ahí ahi aún aun ave bar boa cal can col con dar del día dio dos eco eje era ese esa eso fue fin fui gas hay haz hoy iba ida iré ley los las luz mal mar mas más mes mil muy nos ola oro osa oso pan paz pie por que red rey río sal sea sed ser sin sol son soy sur tal tan té ten tía tia tío tio tos uno uva vas vea ven ver vez voy web
-amo ama dan das doy lee leo pon usa use
+ahí ahi aun aún ave bar boa cal can col con dar del día dio dos eco eje era ese esa eso fue fin fui gas han hay haz hoy iba ida iré ley los las luz mal mar mas más mes mil mis muy nos ola oro osa oso pan paz pie por que qué red rey río sal sea sed ser sin sol son soy sur sus tal tan ten tía tia tío tio tos tus uno uva vas vea ven ver vez voy amo ama dan das doy has lee leo pon usa use año
 '''.split())
 
-# Important everyday lemmas and forms are explicitly protected. The corpus then
-# contributes tens of thousands of additional real surface forms.
+# Protect ordinary forms that should always be playable even if the upstream
+# frequency list changes.
 WHITE = set('''
 ser soy eres somos sois son era eras éramos erais eran fui fuiste fue fuimos fuisteis fueron sido siendo
 estar estoy estás está estamos estáis están estaba estabas estábamos estabais estaban estuve estuviste estuvo estuvimos estuvisteis estuvieron estado estando
@@ -38,14 +37,15 @@ música cine teatro mundo vida tiempo año años día días noche noches mano ma
 bien mal grande grandes pequeño pequeña pequeños pequeñas rojo roja rojos rojas verde verdes azul azules
 '''.split()) | SHORT3
 
-# High-frequency proper names, countries/cities, abbreviations and web/technical
-# tokens that are especially likely to leak from general corpora.
+# Common proper names, places, abbreviations and web/technical tokens that can
+# occur in subtitle-derived frequency lists but should not count as vocabulary.
 BLACK = set('''
-www http https com org net app pdf jpg jpeg png html css javascript js api url sms gps cpu gpu usb dvd
-madrid barcelona valencia sevilla malaga málaga bilbao zaragoza españa spain mexico méxico argentina chile peru perú colombia venezuela brasil brazil cuba ecuador bolivia paraguay uruguay panama panamá
+www http https com org net app pdf jpg jpeg png html css javascript api url sms gps cpu gpu usb dvd
+madrid barcelona valencia sevilla malaga málaga bilbao zaragoza españa mexico méxico argentina chile peru perú colombia venezuela brasil brazil cuba ecuador bolivia paraguay uruguay panama panamá
 juan jose josé maria maría pedro pablo carlos david daniel miguel angel ángel antonio manuel francisco javier alejandro fernando sergio diego alberto raul raúl ruben rubén jorge luis jesus jesús
 ana laura lucia lucía carmen elena isabel paula sara sofia sofía marta patricia monica mónica sandra rosa beatriz natalia cristina silvia teresa
-messi ronaldo madridista barça barca google facebook instagram twitter youtube whatsapp tiktok amazon apple microsoft samsung sony
+john jack mike michael james robert william george richard thomas charles
+messi ronaldo google facebook instagram twitter youtube whatsapp tiktok amazon apple microsoft samsung sony
 '''.split())
 
 
@@ -56,35 +56,29 @@ def clean(raw: str):
     return None
 
 
-def threshold(n: int):
-    if n == 3:
-        return 99.0
-    if n == 4:
-        return 3.95
-    if n == 5:
-        return 3.65
-    if n <= 8:
-        return 3.35
-    return 3.25
-
-# wordfreq is a corpus-derived list of actual Spanish surface forms. This means
-# common conjugations, plurals and masculine/feminine adjective forms enter as
-# independent playable words when they are genuinely frequent.
-words = set(WHITE)
-for raw in top_n_list('es', 120000):
+def accepted(raw: str):
     w = clean(raw)
     if not w or w in BLACK:
-        continue
-    if len(w) == 3:
-        continue
-    if zipf_frequency(w, 'es') >= threshold(len(w)):
+        return None
+    if len(w) == 3 and w not in SHORT3:
+        return None
+    return w
+
+req = Request(SOURCE, headers={'User-Agent': 'WORDtris-dictionary-builder/1.0'})
+with urlopen(req, timeout=30) as response:
+    text = response.read().decode('utf-8')
+
+words = set(WHITE)
+for line in text.splitlines():
+    w = accepted(line)
+    if w:
         words.add(w)
 
 words -= BLACK
-words = {w for w in words if clean(w) == w and (len(w) != 3 or w in SHORT3)}
+words = {w for w in words if accepted(w) == w}
 
 required = {
-    'que','con','por','sin','del','los','las','una','uno','dos','más','muy',
+    'que','qué','con','por','sin','del','los','las','una','uno','dos','más','muy',
     'ser','soy','eres','está','son','fue','fui','voy','vas','casa','casas',
     'hablo','hablas','habla','hablamos','comer','comiendo','vivir','viviendo',
     'tengo','tienes','tiene','hago','haces','hace','puedo','puedes','quiere',

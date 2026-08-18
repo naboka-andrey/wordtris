@@ -1,0 +1,44 @@
+name: Build WORDtris dictionary
+
+on:
+  push:
+    paths:
+      - 'build_words.py'
+      - '.github/workflows/build-dictionary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pymorphy3 wordfreq
+      - run: python build_words.py
+      - name: Sanity checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          w=Path('words.txt').read_text(encoding='utf-8').splitlines()
+          assert len(w) == len(set(w))
+          assert all(3 <= len(x) <= 16 for x in w)
+          assert {'том','дуб','бук','учи','еду','воин','вена'} <= set(w)
+          assert not ({'осо','одав','ски'} & set(w))
+          print('dictionary words:', len(w))
+          PY
+      - name: Commit generated dictionary
+        run: |
+          if git diff --quiet -- words.txt; then
+            echo 'No dictionary changes'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add words.txt
+          git commit -m 'Rebuild controlled Russian dictionary [skip ci]'
+          git push
